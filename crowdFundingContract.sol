@@ -10,8 +10,21 @@ contract crowdFunding{
     uint public raisedAmount;
     uint public noOfContributors;
 
+    struct Request  //manager requests funds from smart contract
+    {
+        string description;     //for what purpose funds needed
+        address payable recipient;    //fund recipient address
+        uint value; //how much funds needed
+        bool completed;  //for contributors voting
+        uint noOfVoters;
+        mapping(address=>bool) voters;  //mapping linked to voters address
+    }
+    mapping(uint=>Request) public requests;     //multiple requests can be received
+    uint public numRequests;
+
     //constructor executes first when contract deployed
-    constructor(uint _target, uint _deadline)       //sets target and deadline
+    //sets target and deadline
+    constructor(uint _target, uint _deadline)
     {  
         target = _target;
         deadline = block.timestamp + _deadline;    //current block creation time + deadline(in seconds)
@@ -46,6 +59,46 @@ contract crowdFunding{
         address payable user = payable(msg.sender);
         user.transfer(contributors[msg.sender]);
         contributors[msg.sender] = 0;
-
     }
+
+    //only manager can make requests
+    modifier onlyManager()
+    {
+        require(msg.sender==manager,"Only Manager can call this");
+        _;
+    }
+
+    //requst for funds from smart contract
+    function createRequsts(string memory _description, address payable _recipient, uint _value) public onlyManager
+    {
+        Request storage newRequest = requests[numRequests];
+        numRequests++;
+        newRequest.description=_description;
+        newRequest.recipient=_recipient;
+        newRequest.value=_value;
+        newRequest.completed=false;
+        newRequest.noOfVoters=0;
+    }
+
+    //fn for voting
+    function voteRequest(uint _requestNo) public        
+    {
+        require(contributors[msg.sender]>0,"You must be a contributor");
+        Request storage thisRequest=requests[_requestNo];
+        require(thisRequest.voters[msg.sender]==false,"You have already voted");
+        thisRequest.voters[msg.sender]=true;
+        thisRequest.noOfVoters++;
+    }
+
+    //fn for making payment
+    function makePayment(uint _requestNo) public onlyManager
+    {
+        require(raisedAmount>=target);
+        Request storage thisRequest=requests[_requestNo];
+        require(thisRequest.completed==false,"The request has been completed");
+        require(thisRequest.noOfVoters > noOfContributors/2,"Majority does not support");
+        thisRequest.recipient.transfer(thisRequest.value);
+        thisRequest.completed=true;
+    }
+
 }
